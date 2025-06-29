@@ -15,10 +15,11 @@ import {
   Calendar,
   Youtube,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-type ActionType = 'WHAT' | 'HOW' | 'WHEN' | 'EXPLAIN' | 'EXPAND' | 'CUSTOM' | 'YOUTUBE';
+type ActionType = 'WHAT' | 'HOW' | 'WHEN' | 'EXPLAIN' | 'EXPAND' | 'CUSTOM' | 'YOUTUBE' | 'DELETE';
 
 interface ToolboxProps {
   isNodeSelected: boolean;
@@ -31,6 +32,7 @@ const actionButtons = [
   { type: 'WHEN', label: 'When', icon: Calendar },
   { type: 'EXPLAIN', label: 'Explain', icon: BookText },
   { type: 'EXPAND', label: 'Expand', icon: Expand },
+  { type: 'DELETE', label: 'Delete', icon: Trash2 },
 ];
 
 export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
@@ -44,8 +46,8 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
       toast({ title: "Please select a node first.", variant: "destructive" });
       return;
     }
-    startTransition(() => {
-      onAction(actionType, undefined);
+    startTransition(async () => {
+      await onAction(actionType, undefined);
     });
   };
 
@@ -78,11 +80,11 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
   return (
     <Card className="absolute top-4 right-4 z-10 w-80 shadow-lg bg-card/80 backdrop-blur-sm">
       <CardContent className="p-4">
-        <div className="grid grid-cols-2 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4">
           {actionButtons.map(({ type, label, icon: Icon }) => (
             <Button
               key={type}
-              variant="outline"
+              variant={type === 'DELETE' ? 'destructive' : 'outline'}
               onClick={() => handleActionClick(type as ActionType)}
               disabled={isPending || !isNodeSelected}
               className="flex flex-col h-20"

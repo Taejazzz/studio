@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useTransition, useCallback } from 'react';
-import type { FormEvent, MouseEvent } from 'react';
+import { useState, useRef, useTransition, useCallback, useLayoutEffect } from 'react';
+import type { FormEvent, MouseEvent, WheelEvent } from 'react';
 import { generateNodeContent } from '@/ai/flows/generate-node-content';
 import type { Node, Edge, NodeType } from '@/types';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,18 @@ import { Loader2 } from 'lucide-react';
 const INITIAL_NODE_WIDTH = 288; // w-72
 const INITIAL_NODE_HEIGHT = 128; // h-32
 
-function CanvasNode({ node, isSelected, onNodeDown, isProcessing }: { node: Node; isSelected: boolean; onNodeDown: (e: MouseEvent, nodeId: string) => void; isProcessing: boolean; }) {
+function CanvasNode({ node, isSelected, onNodeDown, isProcessing, onNodeResize }: { node: Node; isSelected: boolean; onNodeDown: (e: MouseEvent, nodeId: string) => void; isProcessing: boolean; onNodeResize: (nodeId: string, size: {width: number, height: number}) => void; }) {
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (nodeRef.current) {
+      const { offsetWidth, offsetHeight } = nodeRef.current;
+      if (offsetWidth > 0 && offsetHeight > 0 && (node.width !== offsetWidth || node.height !== offsetHeight)) {
+        onNodeResize(node.id, { width: offsetWidth, height: offsetHeight });
+      }
+    }
+  }, [node.content, node.id, node.width, node.height, onNodeResize]);
+  
   const content = (
     node.type === 'youtube' ? (
       <iframe
@@ -35,17 +46,18 @@ function CanvasNode({ node, isSelected, onNodeDown, isProcessing }: { node: Node
   
   return (
     <div
+      ref={nodeRef}
       onMouseDown={(e) => onNodeDown(e, node.id)}
       className={cn(
-        "absolute bg-card text-card-foreground rounded-lg shadow-lg p-4 cursor-grab w-72 transition-all duration-200 ease-in-out",
-        isSelected && "ring-2 ring-primary shadow-2xl",
-        node.type === 'youtube' ? 'h-48' : 'h-auto min-h-32',
+        "absolute bg-card text-card-foreground rounded-lg shadow-lg p-4 cursor-grab transition-colors duration-200 ease-in-out",
+        isSelected && "ring-2 ring-ring shadow-2xl",
+        node.type === 'text' ? 'max-w-xs' : 'w-72',
       )}
       style={{
         left: node.position.x,
         top: node.position.y,
-        width: node.width,
-        height: node.type === 'youtube' ? (node.width * 9) / 16 : node.height,
+        width: node.type === 'youtube' ? node.width : 'auto',
+        height: node.type === 'youtube' ? (node.width * 9) / 16 : 'auto',
       }}
     >
       {content}
@@ -62,17 +74,23 @@ export function ConceptCanvas() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0 });
+  const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0, zoom: 1 });
   const [isPanning, setIsPanning] = useState(false);
   
   const draggingNodeRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  const handleNodeResize = useCallback((nodeId: string, size: { width: number; height: number }) => {
+    setNodes(prev =>
+      prev.map(n => (n.id === nodeId && (n.width !== size.width || n.height !== size.height)) ? { ...n, width: size.width, height: size.height } : n)
+    );
+  }, []);
+
   const getCanvasCenter = () => {
     if (canvasRef.current) {
       return {
-        x: canvasRef.current.clientWidth / 2 - INITIAL_NODE_WIDTH / 2 - canvasTransform.x,
-        y: canvasRef.current.clientHeight / 2 - INITIAL_NODE_HEIGHT / 2 - canvasTransform.y
+        x: (canvasRef.current.clientWidth / 2 - INITIAL_NODE_WIDTH / 2 - canvasTransform.x) / canvasTransform.zoom,
+        y: (canvasRef.current.clientHeight / 2 - INITIAL_NODE_HEIGHT / 2 - canvasTransform.y) / canvasTransform.zoom
       };
     }
     return { x: 200, y: 200 };
@@ -112,7 +130,7 @@ export function ConceptCanvas() {
         y: parentNode.position.y,
       },
       width: INITIAL_NODE_WIDTH,
-      height: INITIAL_NODE_HEIGHT,
+      height: type === 'youtube' ? (INITIAL_NODE_WIDTH * 9) / 16 : INITIAL_NODE_HEIGHT,
     };
 
     const newEdge: Edge = {
@@ -125,8 +143,21 @@ export function ConceptCanvas() {
     setEdges(prev => [...prev, newEdge]);
     setSelectedNodeId(newNode.id);
   };
+
+  const deleteNode = (nodeId: string) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    if (selectedNodeId === nodeId) {
+      setSelectedNodeId(null);
+    }
+  };
   
   const handleToolboxAction = async (actionType: string, data?: string) => {
+    if (actionType === 'DELETE') {
+      if(selectedNodeId) deleteNode(selectedNodeId);
+      return;
+    }
+
     if (!selectedNodeId) return;
 
     const parentNode = nodes.find(n => n.id === selectedNodeId);
@@ -160,20 +191,20 @@ export function ConceptCanvas() {
   };
 
   const onMouseDown = (e: MouseEvent) => {
-    if (e.target !== e.currentTarget && !e.target.classList.contains("canvas-bg")) return;
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("canvas-bg")) return;
     setIsPanning(true);
     setSelectedNodeId(null);
   };
 
   const onMouseMove = (e: MouseEvent) => {
     if (isPanning) {
-      setCanvasTransform(prev => ({ x: prev.x + e.movementX, y: prev.y + e.movementY }));
+      setCanvasTransform(prev => ({ ...prev, x: prev.x + e.movementX, y: prev.y + e.movementY }));
     }
     if (draggingNodeRef.current) {
-        const { nodeId, offsetX, offsetY } = draggingNodeRef.current;
+        const { nodeId } = draggingNodeRef.current;
         setNodes(prev => prev.map(n => 
             n.id === nodeId 
-            ? { ...n, position: { x: n.position.x + e.movementX, y: n.position.y + e.movementY } }
+            ? { ...n, position: { x: n.position.x + e.movementX / canvasTransform.zoom, y: n.position.y + e.movementY / canvasTransform.zoom } }
             : n
         ));
     }
@@ -189,6 +220,26 @@ export function ConceptCanvas() {
     setSelectedNodeId(nodeId);
     draggingNodeRef.current = { nodeId, offsetX: e.nativeEvent.offsetX, offsetY: e.nativeEvent.offsetY };
   }
+
+  const onWheel = (e: WheelEvent<HTMLDivElement>) => {
+    if (!canvasRef.current) return;
+    e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const zoomFactor = 1.1;
+    const newZoom = e.deltaY < 0 ? canvasTransform.zoom * zoomFactor : canvasTransform.zoom / zoomFactor;
+    const clampedZoom = Math.max(0.2, Math.min(3, newZoom));
+    
+    const worldX = (mouseX - canvasTransform.x) / canvasTransform.zoom;
+    const worldY = (mouseY - canvasTransform.y) / canvasTransform.zoom;
+    
+    const newX = mouseX - worldX * clampedZoom;
+    const newY = mouseY - worldY * clampedZoom;
+
+    setCanvasTransform({ x: newX, y: newY, zoom: clampedZoom });
+  };
 
   const getEdgePath = (sourceNode: Node, targetNode: Node) => {
     const sourceX = sourceNode.position.x + sourceNode.width / 2;
@@ -220,8 +271,15 @@ export function ConceptCanvas() {
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onWheel={onWheel}
       >
-        <div className="absolute top-0 left-0 w-full h-full" style={{ transform: `translate(${canvasTransform.x}px, ${canvasTransform.y}px)` }}>
+        <div 
+          className="absolute top-0 left-0" 
+          style={{ 
+            transform: `translate(${canvasTransform.x}px, ${canvasTransform.y}px) scale(${canvasTransform.zoom})`,
+            transformOrigin: '0 0'
+          }}
+        >
             <svg className="absolute w-full h-full pointer-events-none" style={{overflow: 'visible'}}>
                 {edges.map(edge => {
                     const sourceNode = nodes.find(n => n.id === edge.source);
@@ -229,7 +287,7 @@ export function ConceptCanvas() {
                     if (!sourceNode || !targetNode) return null;
 
                     return (
-                        <path key={edge.id} d={getEdgePath(sourceNode, targetNode)} stroke="hsl(var(--primary))" strokeWidth="2" fill="none" />
+                        <path key={edge.id} d={getEdgePath(sourceNode, targetNode)} stroke="hsl(var(--ring))" strokeWidth="2" fill="none" />
                     )
                 })}
             </svg>
@@ -241,6 +299,7 @@ export function ConceptCanvas() {
                     isSelected={selectedNodeId === node.id}
                     onNodeDown={onNodeDown}
                     isProcessing={isPending && selectedNodeId === node.id}
+                    onNodeResize={handleNodeResize}
                 />
             ))}
         </div>
