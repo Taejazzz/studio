@@ -3,7 +3,7 @@
 import { useState, useRef, useTransition, useCallback, useLayoutEffect } from 'react';
 import type { FormEvent, MouseEvent, WheelEvent } from 'react';
 import { generateNodeContent } from '@/ai/flows/generate-node-content';
-import type { Node, Edge, NodeType } from '@/types';
+import type { Node, Edge, NodeType, Settings } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Toolbox } from '@/components/toolbox';
@@ -12,6 +12,7 @@ import { ConceptNavigatorIcon } from '@/components/icons';
 import { cn, getYouTubeVideoId } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
+import { SettingsDialog } from './settings-dialog';
 
 const INITIAL_NODE_WIDTH = 288; // w-72
 const INITIAL_NODE_HEIGHT = 128; // h-32
@@ -80,6 +81,17 @@ export function ConceptCanvas() {
   
   const draggingNodeRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const [settings, setSettings] = useState<Settings>({
+    responseLength: 100,
+    responseFormat: 'paragraph',
+    tone: 'professional',
+    customInstructions: '',
+  });
+
+  const handleSettingsChange = (newSettings: Partial<Settings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
 
   const handleNodeResize = useCallback((nodeId: string, size: { width: number; height: number }) => {
     setNodes(prev =>
@@ -180,6 +192,7 @@ export function ConceptCanvas() {
           parentNodeContent: parentNode.content,
           queryType: actionType as any,
           customQuery: actionType === 'CUSTOM' ? data : undefined,
+          ...settings,
         });
         if (result.generatedContent) {
           addNode(selectedNodeId, result.generatedContent, 'text');
@@ -270,6 +283,8 @@ export function ConceptCanvas() {
       </div>
       
       <Toolbox isNodeSelected={!!selectedNodeId} onAction={handleToolboxAction} />
+
+      <SettingsDialog settings={settings} onSettingsChange={handleSettingsChange} />
 
       <div
         className="w-full h-full cursor-grab active:cursor-grabbing canvas-bg"

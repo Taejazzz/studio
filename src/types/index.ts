@@ -14,3 +14,10 @@ export interface Edge {
   source: string;
   target: string;
 }
+
+export interface Settings {
+  responseLength: number;
+  responseFormat: 'paragraph' | 'bullet points' | 'single word';
+  tone: 'professional' | 'business' | 'friendly' | 'funny' | 'straightforward' | 'one word' | 'expressive';
+  customInstructions: string;
+}
