@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-type ActionType = 'WHAT' | 'HOW' | 'WHEN' | 'EXPLAIN' | 'EXPAND' | 'CUSTOM' | 'YOUTUBE' | 'DELETE';
+export type ActionType = 'WHAT' | 'HOW' | 'WHEN' | 'EXPLAIN' | 'EXPAND' | 'CUSTOM' | 'YOUTUBE' | 'DELETE';
 
 interface ToolboxProps {
   isNodeSelected: boolean;

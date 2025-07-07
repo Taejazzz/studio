@@ -7,6 +7,7 @@ import type { Node, Edge, NodeType } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Toolbox } from '@/components/toolbox';
+import type { ActionType } from '@/components/toolbox';
 import { ConceptNavigatorIcon } from '@/components/icons';
 import { cn, getYouTubeVideoId } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
@@ -152,7 +153,7 @@ export function ConceptCanvas() {
     }
   };
   
-  const handleToolboxAction = async (actionType: string, data?: string) => {
+  const handleToolboxAction = async (actionType: ActionType, data?: string) => {
     if (actionType === 'DELETE') {
       if(selectedNodeId) deleteNode(selectedNodeId);
       return;
