@@ -3,16 +3,18 @@
 import { useState, useRef, useTransition, useCallback, useLayoutEffect } from 'react';
 import type { FormEvent, MouseEvent, WheelEvent } from 'react';
 import { generateNodeContent } from '@/ai/flows/generate-node-content';
-import type { Node, Edge, NodeType, Settings } from '@/types';
+import { findYouTubeVideos } from '@/ai/flows/find-youtube-videos';
+import type { Node, Edge, NodeType, Settings, ActionType, YouTubeVideo } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Toolbox } from '@/components/toolbox';
-import type { ActionType } from '@/types';
 import { ConceptItIcon } from '@/components/icons';
-import { cn, getYouTubeVideoId } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
-import { SettingsDialog } from './settings-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Image from 'next/image';
 
 const INITIAL_NODE_WIDTH = 288; // w-72
 const INITIAL_NODE_HEIGHT = 128; // h-32
@@ -90,6 +92,10 @@ export function ConceptCanvas() {
     customInstructions: '',
   });
 
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([]);
+  const [isYoutubeDialogOpen, setIsYoutubeDialogOpen] = useState(false);
+
+
   const handleSettingsChange = (newSettings: Partial<Settings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
@@ -166,7 +172,7 @@ export function ConceptCanvas() {
     }
   };
   
-  const handleToolboxAction = async (actionType: ActionType, data?: string) => {
+  const handleToolboxAction = (actionType: ActionType, data?: string) => {
     if (actionType === 'DELETE') {
       if(selectedNodeId) deleteNode(selectedNodeId);
       return;
@@ -177,18 +183,15 @@ export function ConceptCanvas() {
     const parentNode = nodes.find(n => n.id === selectedNodeId);
     if (!parentNode) return;
     
-    if (actionType === 'YOUTUBE') {
-      const videoId = getYouTubeVideoId(data || '');
-      if (videoId) {
-        addNode(selectedNodeId, videoId, 'youtube');
-      } else {
-        toast({ title: "Invalid YouTube URL", description: "Please enter a valid YouTube video URL.", variant: "destructive"});
-      }
-      return;
-    }
-
     startTransition(async () => {
       try {
+        if (actionType === 'YOUTUBE') {
+          const result = await findYouTubeVideos({ topic: parentNode.content });
+          setYoutubeResults(result.videos);
+          setIsYoutubeDialogOpen(true);
+          return;
+        }
+
         const result = await generateNodeContent({
           parentNodeContent: parentNode.content,
           queryType: actionType as any,
@@ -204,6 +207,14 @@ export function ConceptCanvas() {
       }
     });
   };
+
+  const handleYoutubeSelect = (videoId: string) => {
+    if (selectedNodeId) {
+      addNode(selectedNodeId, videoId, 'youtube');
+    }
+    setIsYoutubeDialogOpen(false);
+    setYoutubeResults([]);
+  }
 
   const onMouseDown = (e: MouseEvent) => {
     if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("canvas-bg")) return;
@@ -269,7 +280,6 @@ export function ConceptCanvas() {
     return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
   }
 
-
   return (
     <div className="relative w-full h-full" ref={canvasRef}>
       <div className="absolute top-4 left-4 right-4 md:w-auto md:right-auto z-10">
@@ -287,9 +297,12 @@ export function ConceptCanvas() {
         </div>
       </div>
       
-      <Toolbox isNodeSelected={!!selectedNodeId} onAction={handleToolboxAction} />
-
-      <SettingsDialog settings={settings} onSettingsChange={handleSettingsChange} />
+      <Toolbox 
+        isNodeSelected={!!selectedNodeId} 
+        onAction={handleToolboxAction} 
+        settings={settings}
+        onSettingsChange={handleSettingsChange}
+      />
 
       <p className="absolute bottom-9 right-4 md:right-20 z-10 text-sm text-muted-foreground font-medium">@HalfPlateSahil</p>
 
@@ -340,6 +353,33 @@ export function ConceptCanvas() {
             ))}
         </div>
       </div>
+       <Dialog open={isYoutubeDialogOpen} onOpenChange={setIsYoutubeDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Relevant YouTube Videos</DialogTitle>
+            <DialogDescription>
+              Select a video to add to your canvas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto">
+            {youtubeResults.length > 0 ? (
+              youtubeResults.map((video) => (
+                <Card key={video.videoId} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleYoutubeSelect(video.videoId)}>
+                  <CardHeader className="p-0">
+                    <Image src={video.thumbnailUrl} alt={video.title} width={300} height={168} className="rounded-t-lg w-full object-cover" />
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <CardTitle className="text-base line-clamp-2">{video.title}</CardTitle>
+                    <CardDescription className="text-xs line-clamp-3 mt-1">{video.description}</CardDescription>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <p>No videos found.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,13 +20,17 @@ import {
   Plus,
   Trash2,
   PanelTop,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { ActionType } from '@/types';
+import type { ActionType, Settings } from '@/types';
+import { SettingsDialog } from './settings-dialog';
 
 interface ToolboxProps {
   isNodeSelected: boolean;
-  onAction: (actionType: ActionType, data?: string) => Promise<void>;
+  onAction: (actionType: ActionType, data?: string) => void;
+  settings: Settings;
+  onSettingsChange: (newSettings: Partial<Settings>) => void;
 }
 
 const actionButtons = [
@@ -38,15 +42,16 @@ const actionButtons = [
   { type: 'DELETE', label: 'Delete', icon: Trash2 },
 ];
 
-export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
-  const [isPending, startTransition] = useTransition();
+export function Toolbox({ isNodeSelected, onAction, settings, onSettingsChange }: ToolboxProps) {
+  const [isPending, setIsPending] = useState(false);
   const [activeInput, setActiveInput] = useState<'custom' | 'youtube' | null>(null);
   const [inputValue, setInputValue] = useState('');
   const { toast } = useToast();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const handleAction = (action: ActionType, data?: string) => {
-    if ((!isNodeSelected && action !== 'DELETE') || (action === 'DELETE' && !isNodeSelected)) {
+  const handleAction = async (action: ActionType, data?: string) => {
+    if ((!isNodeSelected && action !== 'DELETE' && action !== 'YOUTUBE') || (action === 'DELETE' && !isNodeSelected)) {
       toast({ 
         title: action === 'DELETE' ? "Please select a node to delete." : "Please select a node first.", 
         variant: "destructive" 
@@ -54,16 +59,20 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
       return;
     }
     
-    startTransition(async () => {
+    setIsPending(true);
+    try {
       await onAction(action, data);
-    });
-
-    // Optimistically close sheet and clear inputs on mobile
-    if (activeInput) {
-      setInputValue('');
-      setActiveInput(null);
+    } finally {
+      setIsPending(false);
     }
-    setIsSheetOpen(false);
+
+    if (action !== 'YOUTUBE') {
+      if (activeInput) {
+        setInputValue('');
+        setActiveInput(null);
+      }
+      setIsSheetOpen(false);
+    }
   };
 
   const handleActionClick = (actionType: ActionType) => {
@@ -74,7 +83,8 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
     e.preventDefault();
     if (!inputValue.trim()) return;
     if (activeInput) {
-      handleAction(activeInput.toUpperCase() as ActionType, inputValue);
+      const actionType = activeInput === 'custom' ? 'CUSTOM' : 'YOUTUBE';
+      handleAction(actionType, inputValue);
     }
   };
 
@@ -128,30 +138,14 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
         )}
 
         <Button
-          variant={activeInput === 'youtube' ? 'default' : 'outline'}
-          onClick={() => toggleInput('youtube')}
+          variant='outline'
+          onClick={() => handleAction('YOUTUBE')}
           disabled={isPending || !isNodeSelected}
           className="w-full justify-start"
         >
           <Youtube className="mr-2 h-5 w-5" />
-          Add YouTube Video
+          Search YouTube
         </Button>
-
-        {activeInput === 'youtube' && (
-          <form onSubmit={handleFormSubmit} className="space-y-2 p-2 border rounded-md">
-              <Label htmlFor="youtube-url">YouTube Video URL</Label>
-              <Input
-                id="youtube-url"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                disabled={isPending}
-              />
-              <Button type="submit" disabled={isPending || !inputValue.trim()} className="w-full">
-                {isPending ? <Loader2 className="animate-spin" /> : <><Plus className="mr-2 h-4 w-4" /> Add Video Node</>}
-              </Button>
-          </form>
-        )}
       </div>
       {isPending && <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg"><Loader2 className="animate-spin h-8 w-8 text-primary"/></div>}
     </div>
@@ -166,19 +160,41 @@ export function Toolbox({ isNodeSelected, onAction }: ToolboxProps) {
             {ToolboxContent}
           </CardContent>
         </Card>
+        <SettingsDialog
+            isOpen={isSettingsOpen}
+            setIsOpen={setIsSettingsOpen}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+            trigger={
+                <Button variant="outline" size="icon" className="absolute bottom-4 right-4 z-10 rounded-full h-12 w-12 shadow-lg">
+                    <SettingsIcon className="h-6 w-6" />
+                </Button>
+            }
+        />
       </div>
 
-      {/* Mobile Toolbox: A sheet triggered from the bottom left */}
+      {/* Mobile Toolbox: A sheet triggered from the bottom right */}
       <div className="md:hidden">
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="fixed bottom-4 left-4 z-10 rounded-full h-12 w-12 shadow-lg">
+            <Button variant="outline" size="icon" className="fixed bottom-4 right-4 z-10 rounded-full h-12 w-12 shadow-lg">
               <PanelTop className="h-6 w-6" />
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[80dvh] flex flex-col p-0">
-            <SheetHeader className="p-4 pb-0">
+            <SheetHeader className="p-4 pb-2 flex-row justify-between items-center border-b">
               <SheetTitle>Toolbox</SheetTitle>
+              <SettingsDialog
+                isOpen={isSettingsOpen}
+                setIsOpen={setIsSettingsOpen}
+                settings={settings}
+                onSettingsChange={onSettingsChange}
+                trigger={
+                    <Button variant="ghost" size="icon">
+                        <SettingsIcon className="h-6 w-6" />
+                    </Button>
+                }
+              />
             </SheetHeader>
             <ScrollArea className="flex-grow">
               <div className="p-4">

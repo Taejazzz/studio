@@ -16,17 +16,18 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 interface SettingsDialogProps {
   settings: Settings;
   onSettingsChange: (newSettings: Partial<Settings>) => void;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  trigger: React.ReactNode;
 }
 
-export function SettingsDialog({ settings, onSettingsChange }: SettingsDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function SettingsDialog({ settings, onSettingsChange, isOpen, setIsOpen, trigger }: SettingsDialogProps) {
   const [currentSettings, setCurrentSettings] = useState(settings);
 
   useEffect(() => {
@@ -59,9 +60,7 @@ export function SettingsDialog({ settings, onSettingsChange }: SettingsDialogPro
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="absolute bottom-4 right-4 z-10 rounded-full h-12 w-12 shadow-lg">
-          <SettingsIcon className="h-6 w-6" />
-        </Button>
+        {trigger}
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
