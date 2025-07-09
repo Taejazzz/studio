@@ -84,6 +84,7 @@ export function ConceptCanvas() {
   const [isPanning, setIsPanning] = useState(false);
   
   const draggingNodeRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; time: number; nodeId: string } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [settings, setSettings] = useState<Settings>({
@@ -242,9 +243,25 @@ export function ConceptCanvas() {
     }
   };
 
-  const onMouseUp = () => {
+  const onMouseUp = (e?: MouseEvent) => {
+    // Check for tap gesture on mobile
+    if (isMobile && e && dragStartRef.current && draggingNodeRef.current) {
+      const { x, y, time, nodeId: startNodeId } = dragStartRef.current;
+      const timeDiff = Date.now() - time;
+      const distMoved = Math.sqrt(Math.pow(e.clientX - x, 2) + Math.pow(e.clientY - y, 2));
+
+      // If it's a short press and minimal movement, treat as a tap
+      if (timeDiff < 250 && distMoved < 10) {
+        // Ensure the tap was on the currently selected node
+        if (startNodeId === selectedNodeId) {
+          setIsMobileToolboxOpen(true);
+        }
+      }
+    }
+    
     setIsPanning(false);
     draggingNodeRef.current = null;
+    dragStartRef.current = null;
   };
 
   const onNodeDown = (e: MouseEvent, nodeId: string) => {
@@ -252,7 +269,7 @@ export function ConceptCanvas() {
     setSelectedNodeId(nodeId);
     draggingNodeRef.current = { nodeId, offsetX: e.nativeEvent.offsetX, offsetY: e.nativeEvent.offsetY };
     if (isMobile) {
-      setIsMobileToolboxOpen(true);
+      dragStartRef.current = { x: e.clientX, y: e.clientY, time: Date.now(), nodeId };
     }
   }
 
