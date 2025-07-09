@@ -272,24 +272,26 @@ export function ConceptCanvas() {
 
   return (
     <div className="relative w-full h-full" ref={canvasRef}>
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-4">
-        <div className="flex items-center gap-2 p-2 bg-card/80 backdrop-blur-sm rounded-lg shadow-md">
-          <ConceptItIcon className="w-8 h-8 text-primary" />
-          <div>
-            <h1 className="text-xl font-bold font-headline">ConceptIt</h1>
+      <div className="absolute top-4 left-4 right-4 md:w-auto md:right-auto z-10">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex items-center gap-2 p-2 bg-card/80 backdrop-blur-sm rounded-lg shadow-md self-start">
+            <ConceptItIcon className="w-8 h-8 text-primary" />
+            <div>
+              <h1 className="text-xl font-bold font-headline">ConceptIt</h1>
+            </div>
           </div>
+          <form onSubmit={handleTopicSubmit} className="flex gap-2 w-full md:w-auto">
+            <Input name="topic" placeholder="Enter a topic to explore..." className="w-full md:w-96 bg-card/80 backdrop-blur-sm shadow-md" />
+            <Button type="submit" disabled={isPending}>Start Exploring</Button>
+          </form>
         </div>
-        <form onSubmit={handleTopicSubmit} className="flex gap-2">
-          <Input name="topic" placeholder="Enter a topic to explore..." className="w-96 bg-card/80 backdrop-blur-sm shadow-md" />
-          <Button type="submit" disabled={isPending}>Start Exploring</Button>
-        </form>
       </div>
       
       <Toolbox isNodeSelected={!!selectedNodeId} onAction={handleToolboxAction} />
 
       <SettingsDialog settings={settings} onSettingsChange={handleSettingsChange} />
 
-      <p className="absolute bottom-9 right-20 z-10 text-sm text-muted-foreground font-medium">@HalfPlateSahil</p>
+      <p className="absolute bottom-9 right-4 md:right-20 z-10 text-sm text-muted-foreground font-medium">@HalfPlateSahil</p>
 
       <div
         className="w-full h-full cursor-grab active:cursor-grabbing canvas-bg"
