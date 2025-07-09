@@ -15,35 +15,49 @@ const FindYouTubeVideosInputSchema = z.object({
 });
 export type FindYouTubeVideosInput = z.infer<typeof FindYouTubeVideosInputSchema>;
 
-const YouTubeVideoSchema = z.object({
-  videoId: z.string().describe('The ID of the YouTube video.'),
+// Schema for the data we request from the LLM prompt.
+const PromptYouTubeVideoSchema = z.object({
+  videoId: z.string().describe('A valid 11-character YouTube video ID.'),
   title: z.string().describe('The title of the YouTube video.'),
-  description: z.string().describe('A brief description of the YouTube video.'),
+  description: z.string().describe('A brief, one-sentence description of the YouTube video.'),
+});
+
+const PromptOutputSchema = z.object({
+  videos: z.array(PromptYouTubeVideoSchema).max(5).describe('A list of up to 5 relevant YouTube videos.'),
+});
+
+// Schema for the final data returned by the flow, including the constructed thumbnail URL.
+const FlowYouTubeVideoSchema = PromptYouTubeVideoSchema.extend({
   thumbnailUrl: z.string().url().describe('The URL for the video thumbnail image.'),
 });
 
 const FindYouTubeVideosOutputSchema = z.object({
-  videos: z.array(YouTubeVideoSchema).max(5).describe('A list of up to 5 relevant YouTube videos.'),
+  videos: z.array(FlowYouTubeVideoSchema).max(5),
 });
 export type FindYouTubeVideosOutput = z.infer<typeof FindYouTubeVideosOutputSchema>;
 
-export async function findYouTubeVideos(input: FindYouTubeVideosInput): Promise<FindYouTubeVideosOutput> {
+export async function findYouTubeVideos(
+  input: FindYouTubeVideosInput
+): Promise<FindYouTubeVideosOutput> {
   return findYouTubeVideosFlow(input);
 }
 
 const prompt = ai.definePrompt({
   name: 'findYouTubeVideosPrompt',
   input: {schema: FindYouTubeVideosInputSchema},
-  output: {schema: FindYouTubeVideosOutputSchema},
+  output: {schema: PromptOutputSchema}, // We only ask the LLM for the data it can reliably provide.
   prompt: `You are an expert YouTube video curator.
   
-  Find the 5 most relevant and helpful YouTube videos for the following topic.
-  Provide the video ID, title, a brief description, and a thumbnail URL for each.
-  Ensure the thumbnail URL is a valid, publicly accessible image URL from i.ytimg.com.
+  Find up to 5 of the most relevant and helpful YouTube videos for the given topic.
+  For each video, provide only the following:
+  1. A valid 11-character YouTube video ID.
+  2. The exact video title.
+  3. A brief, one-sentence description of the video's content.
+
+  It is critical that you only provide real, existing YouTube video IDs. Do not invent videos or IDs.
 
   Topic: {{{topic}}}`,
 });
-
 
 const findYouTubeVideosFlow = ai.defineFlow(
   {
@@ -51,8 +65,19 @@ const findYouTubeVideosFlow = ai.defineFlow(
     inputSchema: FindYouTubeVideosInputSchema,
     outputSchema: FindYouTubeVideosOutputSchema,
   },
-  async input => {
+  async (input) => {
+    // Get video data from the LLM (without thumbnail URL).
     const {output} = await prompt(input);
-    return output!;
+    if (!output?.videos) {
+      return {videos: []};
+    }
+
+    // Programmatically construct the thumbnail URL for each video to ensure it's valid.
+    const videosWithThumbnails = output.videos.map((video) => ({
+      ...video,
+      thumbnailUrl: `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
+    }));
+
+    return {videos: videosWithThumbnails};
   }
 );
