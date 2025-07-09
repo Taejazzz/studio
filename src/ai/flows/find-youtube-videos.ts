@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview A Genkit flow for finding relevant YouTube videos.
+ * @fileOverview A Genkit flow for finding relevant YouTube videos using a tool.
  *
  * - findYouTubeVideos - A function that finds YouTube videos for a given topic.
  * - FindYouTubeVideosInput - The input type for the findYouTubeVideos function.
@@ -8,27 +8,20 @@
  */
 
 import {ai} from '@/ai/genkit';
+import {searchYouTube} from '@/services/youtube';
 import {z} from 'genkit';
 
+// Input and Output schemas remain the same for the exported function.
 const FindYouTubeVideosInputSchema = z.object({
   topic: z.string().describe('The topic to search for YouTube videos about.'),
 });
 export type FindYouTubeVideosInput = z.infer<typeof FindYouTubeVideosInputSchema>;
 
-// Schema for the data we request from the LLM prompt.
-const PromptYouTubeVideoSchema = z.object({
-  videoId: z.string().describe('A valid 11-character YouTube video ID.'),
-  title: z.string().describe('The title of the YouTube video.'),
-  description: z.string().describe('A brief, one-sentence description of the YouTube video.'),
-});
-
-const PromptOutputSchema = z.object({
-  videos: z.array(PromptYouTubeVideoSchema).max(5).describe('A list of up to 5 relevant YouTube videos.'),
-});
-
-// Schema for the final data returned by the flow, including the constructed thumbnail URL.
-const FlowYouTubeVideoSchema = PromptYouTubeVideoSchema.extend({
-  thumbnailUrl: z.string().url().describe('The URL for the video thumbnail image.'),
+const FlowYouTubeVideoSchema = z.object({
+    videoId: z.string().describe('A valid 11-character YouTube video ID.'),
+    title: z.string().describe('The title of the YouTube video.'),
+    description: z.string().describe('A brief, one-sentence description of the YouTube video.'),
+    thumbnailUrl: z.string().url().describe('The URL for the video thumbnail image.'),
 });
 
 const FindYouTubeVideosOutputSchema = z.object({
@@ -36,25 +29,51 @@ const FindYouTubeVideosOutputSchema = z.object({
 });
 export type FindYouTubeVideosOutput = z.infer<typeof FindYouTubeVideosOutputSchema>;
 
+
+// The exported function that the UI calls.
 export async function findYouTubeVideos(
   input: FindYouTubeVideosInput
 ): Promise<FindYouTubeVideosOutput> {
+  // Gracefully handle missing API key. If the service returns an empty array,
+  // we pass it on to the UI.
+  if (!process.env.YOUTUBE_API_KEY) {
+    console.warn('YouTube API key not found. Returning no videos.');
+    return { videos: [] };
+  }
   return findYouTubeVideosFlow(input);
 }
 
+
+// Define the tool for searching YouTube. The LLM will call this.
+const youTubeSearchTool = ai.defineTool(
+  {
+    name: 'searchYouTube',
+    description: 'Searches YouTube for videos based on a query.',
+    inputSchema: z.object({
+      query: z.string().describe('The search query for YouTube.'),
+    }),
+    outputSchema: FindYouTubeVideosOutputSchema,
+  },
+  async (input) => {
+    const videos = await searchYouTube(input.query);
+    return { videos };
+  }
+);
+
+
+// The prompt that instructs the LLM to use the tool.
+// The output of this prompt will be the output of the tool call.
 const prompt = ai.definePrompt({
   name: 'findYouTubeVideosPrompt',
+  tools: [youTubeSearchTool],
   input: {schema: FindYouTubeVideosInputSchema},
-  output: {schema: PromptOutputSchema}, // We only ask the LLM for the data it can reliably provide.
-  prompt: `You are an expert YouTube video curator.
+  output: {schema: FindYouTubeVideosOutputSchema},
+  prompt: `You are an expert at creating search queries.
   
-  Find up to 5 of the most relevant and helpful YouTube videos for the given topic.
-  For each video, provide only the following:
-  1. A valid 11-character YouTube video ID.
-  2. The exact video title.
-  3. A brief, one-sentence description of the video's content.
-
-  It is critical that you only provide real, existing YouTube video IDs. Do not invent videos or IDs.
+  Based on the user's topic, generate a concise and effective search query to find relevant YouTube videos.
+  Then, use the searchYouTube tool to perform the search.
+  
+  Do not make up videos or video IDs. Only use the searchYouTube tool.
 
   Topic: {{{topic}}}`,
 });
@@ -66,18 +85,13 @@ const findYouTubeVideosFlow = ai.defineFlow(
     outputSchema: FindYouTubeVideosOutputSchema,
   },
   async (input) => {
-    // Get video data from the LLM (without thumbnail URL).
     const {output} = await prompt(input);
-    if (!output?.videos) {
+
+    // The output should be the result of the tool call.
+    if (!output) {
       return {videos: []};
     }
-
-    // Programmatically construct the thumbnail URL for each video to ensure it's valid.
-    const videosWithThumbnails = output.videos.map((video) => ({
-      ...video,
-      thumbnailUrl: `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
-    }));
-
-    return {videos: videosWithThumbnails};
+    
+    return output;
   }
 );
