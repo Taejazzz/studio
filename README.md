@@ -1,5 +1,7 @@
 # Concept Canvas
 
+[![](https://img.shields.io/badge/Test%20Now-Click%20Here-brightgreen)](https://conceptit.sahildhavale.works/)
+
 Concept Canvas is a powerful and interactive tool for brainstorming and visualizing ideas. It provides a dynamic canvas where you can create, connect, and organize concepts using nodes and edges. This tool is designed to help you map out your thoughts, explore relationships between ideas, and bring your creative projects to life.
 
 ## Features
@@ -35,6 +37,18 @@ Follow these instructions to get a copy of the project up and running on your lo
     ```bash
     npm install
     ```
+
+3.  **Create a `.env` file:**
+
+    Create a `.env` file in the root of the project and add the following environment variables:
+
+    ```
+    GOOGLE_API_KEY=your_google_api_key
+    YOUTUBE_API_KEY=your_youtube_api_key
+    ```
+
+    You will need to obtain these API keys from the [Google Cloud Console](https://console.cloud.google.com/).
+
 
 ### Running the Application
 
