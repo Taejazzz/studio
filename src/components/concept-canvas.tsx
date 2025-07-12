@@ -481,15 +481,21 @@ export function ConceptCanvas() {
   
   const SVG_CANVAS_OFFSET = 5000;
   const getEdgePath = (sourceNode: Node, targetNode: Node) => {
-    if (!sourceNode || !targetNode || !sourceNode.width || !targetNode.width) {
+    if (!sourceNode || !targetNode || !sourceNode.width || !targetNode.height) {
         return '';
     }
+    
     const sourceX = sourceNode.position.x + sourceNode.width / 2 + SVG_CANVAS_OFFSET;
     const sourceY = sourceNode.position.y + sourceNode.height / 2 + SVG_CANVAS_OFFSET;
     const targetX = targetNode.position.x + targetNode.width / 2 + SVG_CANVAS_OFFSET;
     const targetY = targetNode.position.y + targetNode.height / 2 + SVG_CANVAS_OFFSET;
-    
-    return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
+
+    const controlPointX1 = sourceX + (targetX - sourceX) / 2;
+    const controlPointY1 = sourceY;
+    const controlPointX2 = sourceX + (targetX - sourceX) / 2;
+    const controlPointY2 = targetY;
+
+    return `M ${sourceX} ${sourceY} C ${controlPointX1} ${controlPointY1}, ${controlPointX2} ${controlPointY2}, ${targetX} ${targetY}`;
   }
 
   const isGlobalActionPending = isPending && (currentAction === 'SUMMARIZE' || currentAction === 'SUGGEST');
@@ -567,7 +573,7 @@ export function ConceptCanvas() {
                     isSelected={selectedNodeId === node.id}
                     onNodeDown={onNodeDown}
                     onNodeTouchStart={onNodeTouchStart}
-                    isProcessing={isPending && selectedNodeId === node.id || isGlobalActionPending}
+                    isProcessing={isPending && (selectedNodeId === node.id || isGlobalActionPending)}
                     onNodeResize={handleNodeResize}
                     isBeingDragged={draggingNodeId === node.id}
                 />
