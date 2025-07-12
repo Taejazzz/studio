@@ -88,6 +88,7 @@ export function ConceptCanvas() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [currentAction, setCurrentAction] = useState<ActionType | null>(null);
 
   const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0, zoom: 1 });
   const [isPanning, setIsPanning] = useState(false);
@@ -226,6 +227,7 @@ export function ConceptCanvas() {
         return;
     }
     
+    setCurrentAction(actionType);
     startTransition(async () => {
       try {
         switch (actionType) {
@@ -305,6 +307,8 @@ export function ConceptCanvas() {
       } catch (error) {
         console.error("AI action failed:", error);
         toast({ title: "AI Action Failed", description: "Could not complete the request. Please try again.", variant: "destructive"});
+      } finally {
+        setCurrentAction(null);
       }
     });
   };
@@ -488,6 +492,8 @@ export function ConceptCanvas() {
     return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
   }
 
+  const isGlobalActionPending = isPending && (currentAction === 'SUMMARIZE' || currentAction === 'SUGGEST');
+
   return (
     <div className="relative w-full h-full" ref={canvasRef}>
       <div className="absolute top-4 left-4 right-4 md:w-auto md:right-auto z-10">
@@ -561,7 +567,7 @@ export function ConceptCanvas() {
                     isSelected={selectedNodeId === node.id}
                     onNodeDown={onNodeDown}
                     onNodeTouchStart={onNodeTouchStart}
-                    isProcessing={isPending && (selectedNodeId === node.id || (actionType === 'SUMMARIZE' || actionType === 'SUGGEST'))}
+                    isProcessing={isPending && selectedNodeId === node.id || isGlobalActionPending}
                     onNodeResize={handleNodeResize}
                     isBeingDragged={draggingNodeId === node.id}
                 />
