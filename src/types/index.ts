@@ -29,7 +29,10 @@ export type ActionType =
   | 'EXPAND_TOPIC'
   // Global canvas actions
   | 'SUMMARIZE'
-  | 'SUGGEST';
+  | 'SUGGEST'
+  | 'EXPORT_PNG'
+  | 'EXPORT_JSON'
+  | 'IMPORT_JSON';
 
 
 export interface Settings {

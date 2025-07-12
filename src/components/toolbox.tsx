@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   BookText,
   Expand,
@@ -24,7 +25,10 @@ import {
   FileText,
   Image as ImageIcon,
   BrainCircuit,
-  SeparatorHorizontal
+  Upload,
+  Download,
+  FileJson,
+  FileImage
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ActionType, Settings } from '@/types';
@@ -33,7 +37,7 @@ import { Separator } from './ui/separator';
 
 interface ToolboxProps {
   isNodeSelected: boolean;
-  onAction: (actionType: ActionType, data?: string) => void;
+  onAction: (actionType: ActionType, data?: any) => void;
   settings: Settings;
   onSettingsChange: (newSettings: Partial<Settings>) => void;
   isMobileToolboxOpen: boolean;
@@ -69,14 +73,20 @@ export function Toolbox({
   const [inputValue, setInputValue] = useState('');
   const { toast } = useToast();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAction = async (action: ActionType, data?: string) => {
+  const handleAction = async (action: ActionType, data?: any) => {
     if (['WHAT', 'HOW', 'WHEN', 'EXPLAIN', 'EXPAND', 'CUSTOM', 'YOUTUBE', 'DELETE', 'IMAGE', 'EXPAND_TOPIC'].includes(action) && !isNodeSelected) {
       toast({ 
         title: "Please select a node first.",
         variant: "destructive" 
       });
       return;
+    }
+
+    if (action === 'IMPORT_JSON') {
+        importInputRef.current?.click();
+        return;
     }
     
     setIsPending(true);
@@ -92,6 +102,17 @@ export function Toolbox({
         setActiveInput(null);
       }
       onMobileToolboxOpenChange(false);
+    }
+  };
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleAction('IMPORT_JSON', file);
+    }
+    // Reset file input to allow importing the same file again
+    if (importInputRef.current) {
+        importInputRef.current.value = '';
     }
   };
 
@@ -183,6 +204,30 @@ export function Toolbox({
                 <span>{label}</span>
             </Button>
         ))}
+         <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" disabled={isPending} className="w-full justify-start">
+              <Download className="mr-2 h-5 w-5" />
+              Export Canvas
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-2">
+            <div className="grid gap-2">
+              <Button variant="ghost" onClick={() => handleAction('EXPORT_PNG')} className="justify-start">
+                <FileImage className="mr-2 h-4 w-4" /> PNG Image
+              </Button>
+              <Button variant="ghost" onClick={() => handleAction('EXPORT_JSON')} className="justify-start">
+                <FileJson className="mr-2 h-4 w-4" /> JSON Data
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Button variant="outline" onClick={() => handleAction('IMPORT_JSON')} disabled={isPending} className="w-full justify-start">
+          <Upload className="mr-2 h-5 w-5" />
+          Import from JSON
+        </Button>
+        <input type="file" ref={importInputRef} onChange={handleFileImport} accept=".json" className="hidden" />
       </div>
 
       {isPending && <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg"><Loader2 className="animate-spin h-8 w-8 text-primary"/></div>}

@@ -21,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import Image from 'next/image';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import domtoimage from 'dom-to-image';
+import { saveAs } from 'file-saver';
 
 const INITIAL_NODE_WIDTH = 288; // w-72
 const INITIAL_NODE_HEIGHT = 128; // h-32
@@ -62,7 +64,7 @@ function CanvasNode({ node, isSelected, onNodeDown, onNodeTouchStart, isProcessi
       onMouseDown={(e) => onNodeDown(e, node.id)}
       onTouchStart={(e) => onNodeTouchStart(e, node.id)}
       className={cn(
-        "absolute bg-card text-card-foreground rounded-lg shadow-lg p-4 cursor-grab transition-colors duration-200 ease-in-out",
+        "absolute bg-card text-card-foreground rounded-lg shadow-lg p-4 cursor-grab transition-colors duration-200 ease-in-out node-element",
         isSelected && "ring-2 ring-ring shadow-2xl",
         node.type === 'text' ? 'min-w-[18rem] max-w-md' : `w-72`,
       )}
@@ -95,6 +97,7 @@ export function ConceptCanvas() {
   
   const draggingNodeRef = useRef<{ nodeId: string; } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasContentRef = useRef<HTMLDivElement>(null);
   
   const interactionStartRef = useRef<{ x: number; y: number; time: number; } | null>(null);
   const lastPositionRef = useRef<{ x: number, y: number } | null>(null);
@@ -218,8 +221,97 @@ export function ConceptCanvas() {
     };
     setEdges(prev => [...prev, newEdge]);
   };
+
+  const handleExportPNG = async () => {
+    if (!canvasContentRef.current || nodes.length === 0) {
+        toast({ title: "Canvas is empty", description: "Cannot export an empty canvas." });
+        return;
+    }
+
+    toast({ title: "Exporting PNG...", description: "Please wait a moment." });
+
+    const content = canvasContentRef.current;
+
+    // Temporarily remove transform to capture full canvas
+    const originalTransform = content.style.transform;
+    content.style.transform = '';
+
+    // Calculate bounding box of all nodes
+    let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    nodes.forEach(node => {
+        minX = Math.min(minX, node.position.x);
+        minY = Math.min(minY, node.position.y);
+        maxX = Math.max(maxX, node.position.x + node.width);
+        maxY = Math.max(maxY, node.position.y + node.height);
+    });
+    
+    const padding = 50;
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+    
+    // Adjust canvas content view for capture
+    const captureArea = document.createElement('div');
+    captureArea.style.position = 'absolute';
+    captureArea.style.left = `-${minX - padding}px`;
+    captureArea.style.top = `-${minY - padding}px`;
+    content.appendChild(captureArea);
+
+    try {
+        const dataUrl = await domtoimage.toPng(content, {
+            width: width,
+            height: height,
+            style: {
+              transform: `translate(${-(minX-padding)}px, ${-(minY-padding)}px)`,
+              margin: '0',
+            },
+            filter: (node: HTMLElement) => !node.classList?.contains('no-export'),
+        });
+        saveAs(dataUrl, 'concept-canvas.png');
+        toast({ title: "Export successful!", description: "Your PNG has been downloaded." });
+    } catch (error) {
+        console.error('oops, something went wrong!', error);
+        toast({ title: "Export failed", description: "Could not generate PNG.", variant: "destructive" });
+    } finally {
+        // Restore transform
+        content.style.transform = originalTransform;
+        content.removeChild(captureArea);
+    }
+  };
+
+  const handleExportJSON = () => {
+    if (nodes.length === 0) {
+        toast({ title: "Canvas is empty", description: "Cannot export an empty canvas." });
+        return;
+    }
+    const data = JSON.stringify({ nodes, edges }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    saveAs(blob, 'concept-canvas.json');
+    toast({ title: "JSON export successful!", description: "Your data has been downloaded." });
+  };
   
-  const handleToolboxAction = (actionType: ActionType, data?: string) => {
+  const handleImportJSON = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target?.result as string);
+            if (data.nodes && data.edges) {
+                setNodes(data.nodes);
+                setEdges(data.edges);
+                setSelectedNodeId(null);
+                setCanvasTransform({ x: 0, y: 0, zoom: 1 }); // Reset view
+                toast({ title: "Import successful!", description: "Your canvas has been loaded." });
+            } else {
+                throw new Error("Invalid JSON structure.");
+            }
+        } catch (error) {
+            console.error("Failed to parse JSON:", error);
+            toast({ title: "Import failed", description: "The selected file is not valid JSON.", variant: "destructive" });
+        }
+    };
+    reader.readAsText(file);
+  };
+  
+  const handleToolboxAction = (actionType: ActionType, data?: any) => {
     const parentNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) : null;
 
     if (!parentNode && ['WHAT', 'HOW', 'WHEN', 'EXPLAIN', 'EXPAND', 'CUSTOM', 'YOUTUBE', 'DELETE', 'IMAGE', 'EXPAND_TOPIC'].includes(actionType)) {
@@ -290,6 +382,18 @@ export function ConceptCanvas() {
                 }
                 break;
             
+            case 'EXPORT_PNG':
+                await handleExportPNG();
+                break;
+
+            case 'EXPORT_JSON':
+                handleExportJSON();
+                break;
+            
+            case 'IMPORT_JSON':
+                handleImportJSON(data as File);
+                break;
+
             default: // WHAT, HOW, WHEN, EXPLAIN, EXPAND, CUSTOM
                 if (parentNode) {
                     const result = await generateNodeContent({
@@ -306,7 +410,7 @@ export function ConceptCanvas() {
         }
       } catch (error) {
         console.error("AI action failed:", error);
-        toast({ title: "AI Action Failed", description: "Could not complete the request. Please try again.", variant: "destructive"});
+        toast({ title: "Action Failed", description: "Could not complete the request. Please try again.", variant: "destructive"});
       } finally {
         setCurrentAction(null);
       }
@@ -498,11 +602,11 @@ export function ConceptCanvas() {
     return `M ${sourceX} ${sourceY} C ${controlPointX1} ${controlPointY1}, ${controlPointX2} ${controlPointY2}, ${targetX} ${targetY}`;
   }
 
-  const isGlobalActionPending = isPending && (currentAction === 'SUMMARIZE' || currentAction === 'SUGGEST');
+  const isGlobalActionPending = isPending && (currentAction === 'SUMMARIZE' || currentAction === 'SUGGEST' || currentAction === 'EXPORT_PNG');
 
   return (
     <div className="relative w-full h-full" ref={canvasRef}>
-      <div className="absolute top-4 left-4 right-4 md:w-auto md:right-auto z-10">
+      <div className="absolute top-4 left-4 right-4 md:w-auto md:right-auto z-10 no-export">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
           <div className="flex items-center gap-2 p-2 bg-card/80 backdrop-blur-sm rounded-lg shadow-md self-start">
             <ConceptItIcon className="w-8 h-8 text-primary" />
@@ -526,7 +630,7 @@ export function ConceptCanvas() {
         onMobileToolboxOpenChange={setIsMobileToolboxOpen}
       />
 
-      <p className="absolute bottom-9 right-4 md:right-20 z-10 text-sm text-muted-foreground font-medium">@HalfPlateSahil</p>
+      <p className="absolute bottom-9 right-4 md:right-20 z-10 text-sm text-muted-foreground font-medium no-export">@HalfPlateSahil</p>
 
       <div
         className="w-full h-full cursor-grab active:cursor-grabbing canvas-bg"
@@ -540,6 +644,7 @@ export function ConceptCanvas() {
         onTouchEnd={onTouchEnd}
       >
         <div 
+          ref={canvasContentRef}
           className="absolute top-0 left-0" 
           style={{ 
             transform: `translate(${canvasTransform.x}px, ${canvasTransform.y}px) scale(${canvasTransform.zoom})`,
