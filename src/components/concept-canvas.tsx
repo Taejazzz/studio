@@ -630,8 +630,6 @@ export function ConceptCanvas() {
         onMobileToolboxOpenChange={setIsMobileToolboxOpen}
       />
 
-      <p className="absolute bottom-9 right-4 md:right-20 z-10 text-sm text-muted-foreground font-medium no-export">@HalfPlateSahil</p>
-
       <div
         className="w-full h-full cursor-grab active:cursor-grabbing canvas-bg"
         onMouseDown={onMouseDown}
