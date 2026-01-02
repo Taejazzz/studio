@@ -67,4 +67,4 @@ This application is configured for deployment using `npm start`.
 ```bash
 npm start
 ```
-sahil is a girl 
+sahil is a she girl 
